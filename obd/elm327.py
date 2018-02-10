@@ -103,7 +103,7 @@ class ELM327:
 
 
 
-    def __init__(self, portname, baudrate, protocol):
+    def __init__(self, portname, baudrate, protocol, headers, allow_long_messages):
         """Initializes port by resetting device and gettings supported PIDs. """
 
         logger.info("Initializing ELM327: PORT=%s BAUD=%s PROTOCOL=%s" %
@@ -116,7 +116,7 @@ class ELM327:
         self.__status   = OBDStatus.NOT_CONNECTED
         self.__port     = None
         self.__protocol = UnknownProtocol([])
-
+        self.__allow_long_messages = allow_long_messages
 
         # ------------- open port -------------
         try:
@@ -164,6 +164,13 @@ class ELM327:
             self.__error("ATL0 did not return 'OK'")
             return
 
+        # ------------------------ set headers -------------------------------
+        if headers is not None:
+            r = self.__send(b"ATSH%X"%headers)
+            if not self.__isok(r):
+                self.__error("ATSH did not return 'OK'")
+                return
+
         # by now, we've successfuly communicated with the ELM, but not the car
         self.__status = OBDStatus.ELM_CONNECTED
 
@@ -198,7 +205,11 @@ class ELM327:
 
         if not self.__has_message(r0100, "UNABLE TO CONNECT"):
             # success, found the protocol
-            self.__protocol = self._SUPPORTED_PROTOCOLS[protocol](r0100)
+            #self.__protocol = self._SUPPORTED_PROTOCOLS[protocol](r0100)
+            if int(protocol, 16) <= 5:
+                self.__protocol = self._SUPPORTED_PROTOCOLS[protocol](r0100, self.__allow_long_messages)
+            else:
+                self.__protocol = self._SUPPORTED_PROTOCOLS[protocol](r0100)
             return True
 
         return False
@@ -234,7 +245,11 @@ class ELM327:
         # check if the protocol is something we know
         if p in self._SUPPORTED_PROTOCOLS:
             # jackpot, instantiate the corresponding protocol handler
-            self.__protocol = self._SUPPORTED_PROTOCOLS[p](r0100)
+            #self.__protocol = self._SUPPORTED_PROTOCOLS[p](r0100)
+            if int(p, 16) <= 5:
+                self.__protocol = self._SUPPORTED_PROTOCOLS[p](r0100, self.__allow_long_messages)
+            else:
+                self.__protocol = self._SUPPORTED_PROTOCOLS[p](r0100)
             return True
         else:
             # an unknown protocol
@@ -247,7 +262,11 @@ class ELM327:
                 r0100 = self.__send(b"0100")
                 if not self.__has_message(r0100, "UNABLE TO CONNECT"):
                     # success, found the protocol
-                    self.__protocol = self._SUPPORTED_PROTOCOLS[p](r0100)
+                    #self.__protocol = self._SUPPORTED_PROTOCOLS[p](r0100)
+                    if int(p, 16) <= 5:
+                        self.__protocol = self._SUPPORTED_PROTOCOLS[p](r0100, self.__allow_long_messages)
+                    else:
+                        self.__protocol = self._SUPPORTED_PROTOCOLS[p](r0100)
                     return True
 
         # if we've come this far, then we have failed...
